@@ -9,33 +9,50 @@ contract Meefie is ERC20, ERC20Burnable {
 
     address _taxWallet;
     
-    uint256 _multiplier;
-    uint256 _burn;
-    uint256 _tax;
-    
+    uint256 _buyTax;
+    uint256 _sellTax;
 
-    constructor(uint256 multipliier_, address taxWallet_, uint256 burn_, uint256 tax_) ERC20("Meefie", "MTF19") {
+    uint256 taxAmount;
+
+    mapping(address => uint256) private _balances;
+
+    constructor(address taxWallet_, uint256 buyTax_, uint256 sellTax_) ERC20("Meefie", "MTF27") {
         _mint(msg.sender, 100000000000 * 10 ** decimals());
 
         _taxWallet = taxWallet_;
-        _multiplier = multipliier_;
-        _burn = burn_;
-        _tax = tax_;
+        _buyTax = buyTax_;
+        _sellTax = sellTax_;
     }
 
-    function burn() public returns (address) {
-        return _burn;
-    }
+    // Event emitted when taxes are collected
+    event TaxCollected(address indexed from, uint256 value);
 
-    function multiplier()  returns (uint256) {
-        return _multiplier;
-    }
-
-    function setTaxWallet(address walletAddress_) onlyOwner public {
-        _taxWallet = walletAddress_;
-    }
-
-    function taxWallet() public returns (address) {
+    function taxWallet() public view returns (address) {
         return _taxWallet;
+    }
+
+    function transfer(address to, uint256 value) public override returns (bool) {
+        
+        require(to != address(0), "Transfer to the zero address is not allowed");
+        require(_balances[msg.sender] >= value, "Insufficient balance");
+
+         // Calculate taxes
+
+         // Sell
+         if(msg.sender == tx.origin) {
+            taxAmount = (value * _sellTax) / 100; // Apply sell tax only to external transactions
+         } else {
+            taxAmount = (value * _buyTax) / 100; // Apply buy tax only to external transactions
+         }
+
+        uint256 netValue = value - taxAmount;
+
+        _balances[msg.sender] -= value;
+        _balances[to] += netValue;
+
+        emit Transfer(msg.sender, to, netValue);
+        emit TaxCollected(msg.sender, taxAmount);
+
+        return super.transfer(to, value);
     }
 }
