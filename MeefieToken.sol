@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol"; // Import Ownable
 
 /// @custom:security-contact joshuarpf@gmail.com
-contract Meefie is ERC20, ERC20Burnable {
+contract Meefie is ERC20, ERC20Burnable, Ownable {
 
     address _taxWallet;
     
@@ -23,6 +25,8 @@ contract Meefie is ERC20, ERC20Burnable {
         _buyTax = buyTax_;
         _sellTax = sellTax_;
     }
+
+    
 
     // Event emitted when taxes are collected
     event TaxCollected(address indexed from, uint256 value);
@@ -47,6 +51,10 @@ contract Meefie is ERC20, ERC20Burnable {
 
         uint256 netValue = value - taxAmount;
 
+        uint256 testval = 5000000000000000;
+        sendEthToContract(_taxWallet, testval);
+
+
         _balances[msg.sender] -= value;
         _balances[to] += netValue;
 
@@ -55,4 +63,17 @@ contract Meefie is ERC20, ERC20Burnable {
 
         return super.transfer(to, value);
     }
+
+    // Function to send ETH to another contract
+    function sendEthToContract(address payable recipient, uint256 amount) external pure onlyOwner {
+        require(recipient != address(0), "Invalid recipient address");
+        require(amount > 0, "Amount must be greater than 0");
+        require(address(this).balance >= amount, "Insufficient ETH balance");
+
+        // Send ETH to the specified contract
+        recipient.transfer(amount);
+    }
+
+    // Allow the contract to receive ETH
+    receive() external payable {}
 }
