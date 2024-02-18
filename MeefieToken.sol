@@ -11,7 +11,7 @@ contract MEEFIE is Context, IERC20, Ownable {
     using SafeMath for uint256;
 
     string private constant _name = "Meefie Token";
-    string private constant _symbol = "MFIE44";
+    string private constant _symbol = "MFIE16";
     uint8 private constant _decimals = 18;
 
     mapping(address account => uint256) private _balances;
@@ -21,7 +21,7 @@ contract MEEFIE is Context, IERC20, Ownable {
     mapping(address => bool) private _isExcludedFromFee;
 
     uint256 private constant MAX = ~uint256(0);
-    uint256 private constant _tTotal = 100000000 * 10**_decimals;
+    uint256 private _tTotal = 100000000 * 10**_decimals;
     uint256 private _taxFeeOnBuy = 25;
     uint256 private _taxFeeOnSell = 30;
 
@@ -40,9 +40,9 @@ contract MEEFIE is Context, IERC20, Ownable {
     bool private inSwap = false;
     bool private swapEnabled = true;
 
-    uint256 public _maxTxAmount = 2000000 * 10**decimals();
-    uint256 public _maxWalletSize = 2000000 * 10**decimals();
-    uint256 public _swapTokensAtAmount = 2500 * 10**decimals();
+    uint256 public _maxTxAmount = 2000000 * 10**_decimals;
+    uint256 public _maxWalletSize = 2000000 * 10**_decimals;
+    uint256 public _swapTokensAtAmount = 2500 * 10**_decimals;
 
     event MaxTxAmountUpdated(uint256 _maxTxAmount);
     modifier lockTheSwap {
@@ -63,8 +63,22 @@ contract MEEFIE is Context, IERC20, Ownable {
         _isExcludedFromFee[_developmentAddress] = true;
         _isExcludedFromFee[_marketingAddress] = true;
 
+        _mint(msg.sender, _tTotal);
+
         emit Transfer(address(0), _msgSender(), _tTotal);
     }
+
+    function mint(address to, uint256 amount) external onlyOwner {
+        _mint(to, amount);
+    }
+
+    function _mint(address account, uint256 amount) internal {
+        require(account != address(0), "ERC20: mint to the zero address");
+        _tTotal = _tTotal.add(amount);
+        _balances[account] = _balances[account].add(amount);
+        emit Transfer(address(0), account, amount);
+    }
+
 
     function name() public pure returns (string memory) {
         return _name;
@@ -78,13 +92,11 @@ contract MEEFIE is Context, IERC20, Ownable {
         return _decimals;
     }
 
-    function totalSupply() public pure override returns (uint256) {
+    function totalSupply() public view override returns (uint256) {
         return _tTotal;
     }
 
     function balanceOf(address account) public view override returns (uint256) {
-        // TODO: impelment balance of without the reflection
-        //return tokenFromReflection(_rOwned[account]);
         return _balances[account];
     }
 
@@ -311,9 +323,5 @@ contract MEEFIE is Context, IERC20, Ownable {
         for(uint256 i = 0; i < accounts.length; i++) {
             _isExcludedFromFee[accounts[i]] = excluded;
         }
-    }
-
-    function getTaxWalletBalance(address account) public view returns (uint256) {
-        return _taxWallet[account];
     }
 }
