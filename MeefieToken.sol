@@ -63,12 +63,12 @@ contract Meefie is Context, IERC20, Ownable {
 
     bool public noBlackList;
    
-    address payable private Wallet_Dev = payable(0x8D7449ACF6D894D05f21BdC051737564991d83a8);
+    address payable private Wallet_Dev;
     address payable private Wallet_Burn = payable(0x000000000000000000000000000000000000dEaD); 
     address payable private Wallet_zero = payable(0x0000000000000000000000000000000000000000); 
 
     string private _name = "Meefie"; 
-    string private _symbol = "MFIE12";  
+    string private _symbol; 
     uint8 private _decimals = 18;
     uint256 private _tTotal = 1000000000 * 10**_decimals;
     uint256 private _tFeeTotal;
@@ -85,7 +85,6 @@ contract Meefie is Context, IERC20, Ownable {
     uint256 private _TotalFee = 30;
     uint256 public _buyFee = 2;
     uint256 public _sellFee = 3;
-
 
     // 'Previous fees' are used to keep track of fee settings when removing and restoring fees
     uint256 private _previousTotalFee = _TotalFee; 
@@ -110,6 +109,7 @@ contract Meefie is Context, IERC20, Ownable {
     */
                                      
     IUniswapV2Router02 public uniswapV2Router;
+    address private _uniswapRouterAddress = 0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
     address public uniswapV2Pair;
     bool public inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
@@ -129,11 +129,15 @@ contract Meefie is Context, IERC20, Ownable {
         inSwapAndLiquify = false;
     }
 
-    constructor () {
+    constructor (string memory inputSymbol) {
+
+        _symbol = inputSymbol;
 
         _tOwned[owner()] = _tTotal;
-        
-        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D); 
+
+        Wallet_Update_Dev(payable(msg.sender));
+
+        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_uniswapRouterAddress); 
         
         // Create pair address for PancakeSwap
         uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
@@ -211,7 +215,7 @@ contract Meefie is Context, IERC20, Ownable {
         _isExcludedFromFee[account] = false;
     }
 
-    function _set_Fees(uint256 Buy_Fee, uint256 Sell_Fee) external onlyOwner() {
+    function setFees(uint256 Buy_Fee, uint256 Sell_Fee) external onlyOwner() {
 
         require((Buy_Fee + Sell_Fee) <= maxPossibleFee, "Fee is too high!");
         _sellFee = Sell_Fee;
@@ -478,6 +482,10 @@ contract Meefie is Context, IERC20, Ownable {
             address(this),
             block.timestamp
         );
+    }
+
+    function devWallet() public view onlyOwner returns(address) {
+        return Wallet_Dev;
     }
 
     // Remove random tokens from the contract and send to a wallet
