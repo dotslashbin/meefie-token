@@ -131,11 +131,12 @@ contract Meefie is Context, IERC20, Ownable {
         inSwapAndLiquify = false;
     }
 
-    constructor (string memory inputSymbol) {
+    constructor (string memory inputSymbol, address ownerAddress) {
 
         _symbol = inputSymbol;
 
-        _tOwned[owner()] = _tTotal;
+        _tOwned[ownerAddress] = _tTotal;
+        // _tOwned[owner()] = _tTotal;
 
         updateTaxWallet(payable(msg.sender));
 
