@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.17;
 
-import {IUniswapV2Factory, IUniswapV2Pair, IUniswapV2Router01, IUniswapV2Router02} from './extensions/Uniswap.sol';
-import {IERC20} from './extensions/ERC20.sol';
-import {SafeMath} from './extensions/Safemath.sol';
-import {Address} from './extensions/Address.sol';
+import {IUniswapV2Factory, IUniswapV2Pair, IUniswapV2Router01, IUniswapV2Router02} from './Uniswap.sol';
+import {IERC20} from './ERC20.sol';
+import {SafeMath} from './Safemath.sol';
+import {Address} from './Address.sol';
 
 abstract contract Context {
     function _msgSender() internal view virtual returns (address) {
@@ -63,9 +63,9 @@ contract Meefie is Context, IERC20, Ownable {
 
     bool public noBlackList;
    
-    address payable private Wallet_Dev;
-    address payable private Wallet_Burn = payable(0x000000000000000000000000000000000000dEaD); 
-    address payable private Wallet_zero = payable(0x0000000000000000000000000000000000000000); 
+    address payable private _taxWallet;
+    address payable private _burnWallet = payable(0x000000000000000000000000000000000000dEaD); 
+    address payable private _zeroWallet = payable(0x0000000000000000000000000000000000000000); 
 
     string private _name = "Meefie"; 
     string private _symbol; 
@@ -97,9 +97,11 @@ contract Meefie is Context, IERC20, Ownable {
     
     */
 
-    uint256 public _maxWalletToken = _tTotal.mul(4).div(100);
+   uint256 private _walletLimitPercentage = 4;
+
+    uint256 public _maxWalletToken = _tTotal.mul(_walletLimitPercentage).div(100);
     uint256 private _previousMaxWalletToken = _maxWalletToken;
-    uint256 public _maxTxAmount = _tTotal.mul(4).div(100); 
+    uint256 public _maxTxAmount = _tTotal.mul(_walletLimitPercentage).div(100); 
     uint256 private _previousMaxTxAmount = _maxTxAmount;
 
     /* 
@@ -135,7 +137,7 @@ contract Meefie is Context, IERC20, Ownable {
 
         _tOwned[owner()] = _tTotal;
 
-        Wallet_Update_Dev(payable(msg.sender));
+        updateTaxWallet(payable(msg.sender));
 
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_uniswapRouterAddress); 
         
@@ -145,7 +147,7 @@ contract Meefie is Context, IERC20, Ownable {
         uniswapV2Router = _uniswapV2Router;
         _isExcludedFromFee[owner()] = true;
         _isExcludedFromFee[address(this)] = true;
-        _isExcludedFromFee[Wallet_Dev] = true;
+        _isExcludedFromFee[_taxWallet] = true;
 
         emit Transfer(address(0), owner(), _tTotal);
     }
@@ -224,9 +226,9 @@ contract Meefie is Context, IERC20, Ownable {
     }
 
     // Update main wallet
-    function Wallet_Update_Dev(address payable wallet) public onlyOwner() {
-        Wallet_Dev = wallet;
-        _isExcludedFromFee[Wallet_Dev] = true;
+    function updateTaxWallet(address payable wallet) public onlyOwner() {
+        _taxWallet = wallet;
+        _isExcludedFromFee[_taxWallet] = true;
     }
 
 
@@ -237,13 +239,13 @@ contract Meefie is Context, IERC20, Ownable {
     */
     
     // Toggle on and off to auto process tokens to BNB wallet 
-    function set_Swap_And_Liquify_Enabled(bool true_or_false) public onlyOwner {
+    function setSwapAndLiquifyEnabled(bool true_or_false) public onlyOwner {
         swapAndLiquifyEnabled = true_or_false;
         emit SwapAndLiquifyEnabledUpdated(true_or_false);
     }
 
     // This will set the number of transactions required before the 'swapAndLiquify' function triggers
-    function set_Number_Of_Transactions_Before_Liquify_Trigger(uint8 number_of_transactions) public onlyOwner {
+    function setNumberOfTransactionsBeforeLiquifyTrigger(uint8 number_of_transactions) public onlyOwner {
         swapTrigger = number_of_transactions;
     }
     
@@ -252,7 +254,7 @@ contract Meefie is Context, IERC20, Ownable {
     // This function is required so that the contract can receive BNB from pancakeswap
     receive() external payable {}
 
-    function blacklist_Add_Wallets(address[] calldata addresses) external onlyOwner {
+    function blacklistAddWallets(address[] calldata addresses) external onlyOwner {
        
         uint256 startGas;
         uint256 gasUsed;
@@ -270,7 +272,7 @@ contract Meefie is Context, IERC20, Ownable {
 
 
     // Blacklist - block wallets (REMOVE - COMMA SEPARATE MULTIPLE WALLETS)
-    function blacklist_Remove_Wallets(address[] calldata addresses) external onlyOwner {
+    function blacklistRemoveWallets(address[] calldata addresses) external onlyOwner {
        
         uint256 startGas;
         uint256 gasUsed;
@@ -285,7 +287,7 @@ contract Meefie is Context, IERC20, Ownable {
     }
     }
 
-    function blacklist_Switch(bool true_or_false) public onlyOwner {
+    function blacklistSwitch(bool true_or_false) public onlyOwner {
         noBlackList = true_or_false;
     } 
 
@@ -295,7 +297,7 @@ contract Meefie is Context, IERC20, Ownable {
     // True = there will be no fees when moving tokens around or giving them to friends! (There will only be a fee to buy or sell)
     // False = there will be a fee when buying/selling/tranfering tokens
     // Default is true
-    function set_Transfers_Without_Fees(bool true_or_false) external onlyOwner {
+    function setTransfersWithoutFees(bool true_or_false) external onlyOwner {
         noFeeToTransfer = true_or_false;
     }
 
@@ -317,7 +319,7 @@ contract Meefie is Context, IERC20, Ownable {
     */
 
     // Set the Max transaction amount (percent of total supply)
-    function set_Max_Transaction_Percent(uint256 maxTxPercent_x100) external onlyOwner() {
+    function setMaxTransactionPercent(uint256 maxTxPercent_x100) external onlyOwner() {
         _maxTxAmount = _tTotal*maxTxPercent_x100/10000;
     }    
     
@@ -374,10 +376,10 @@ contract Meefie is Context, IERC20, Ownable {
 
         // Limit wallet total
         if (to != owner() &&
-            to != Wallet_Dev &&
+            to != _taxWallet &&
             to != address(this) &&
             to != uniswapV2Pair &&
-            to != Wallet_Burn &&
+            to != _burnWallet &&
             from != owner()){
             uint256 heldTokens = balanceOf(to);
             require((heldTokens + amount) <= _maxWalletToken,"You are trying to buy too many tokens. You have reached the limit for one wallet.");}
@@ -454,7 +456,7 @@ contract Meefie is Context, IERC20, Ownable {
         
         swapTokensForBNB(contractTokenBalance);
         uint256 contractBNB = address(this).balance;
-        sendToWallet(Wallet_Dev,contractBNB);
+        sendToWallet(_taxWallet,contractBNB);
     }
 
 
@@ -485,11 +487,11 @@ contract Meefie is Context, IERC20, Ownable {
     }
 
     function devWallet() public view onlyOwner returns(address) {
-        return Wallet_Dev;
+        return _taxWallet;
     }
 
     // Remove random tokens from the contract and send to a wallet
-    function remove_Random_Tokens(address random_Token_Address, address send_to_wallet, uint256 number_of_tokens) public onlyOwner returns(bool _sent){
+    function removeRandomTokens(address random_Token_Address, address send_to_wallet, uint256 number_of_tokens) public onlyOwner returns(bool _sent){
         require(random_Token_Address != address(this), "Can not remove native token");
         uint256 randomBalance = IERC20(random_Token_Address).balanceOf(address(this));
         if (number_of_tokens > randomBalance){number_of_tokens = randomBalance;}
@@ -497,20 +499,20 @@ contract Meefie is Context, IERC20, Ownable {
     }
 
     // Set new router and make the new pair address
-    function set_New_Router_and_Make_Pair(address newRouter) public onlyOwner() {
+    function setNewRouterandMakePair(address newRouter) public onlyOwner() {
         IUniswapV2Router02 _newPCSRouter = IUniswapV2Router02(newRouter);
         uniswapV2Pair = IUniswapV2Factory(_newPCSRouter.factory()).createPair(address(this), _newPCSRouter.WETH());
         uniswapV2Router = _newPCSRouter;
     }
    
     // Set new router
-    function set_New_Router_Address(address newRouter) public onlyOwner() {
+    function setNewRouterAddress(address newRouter) public onlyOwner() {
         IUniswapV2Router02 _newPCSRouter = IUniswapV2Router02(newRouter);
         uniswapV2Router = _newPCSRouter;
     }
     
     // Set new address - This will be the 'Cake LP' address for the token pairing
-    function set_New_Pair_Address(address newPair) public onlyOwner() {
+    function setNewPairAddress(address newPair) public onlyOwner() {
         uniswapV2Pair = newPair;
     }
 
@@ -541,5 +543,13 @@ contract Meefie is Context, IERC20, Ownable {
         uint256 tDev = tAmount*_TotalFee/100;
         uint256 tTransferAmount = tAmount.sub(tDev);
         return (tTransferAmount, tDev);
+    }
+
+    function getWalletLimitPercentage() public view onlyOwner returns(uint256) {
+        return _walletLimitPercentage;
+    }
+
+    function _setWalletLimitPercentage(uint256 value) public onlyOwner() {
+        _walletLimitPercentage = value;
     }
 }
