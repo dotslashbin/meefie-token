@@ -47,6 +47,8 @@ contract Meefie is Context, IERC20, Ownable {
     uint256 private _previousTotalFee = _TotalFee; 
     uint256 private _previousBuyFee = _buyFee; 
     uint256 private _previousSellFee = _sellFee; 
+    uint256 private _previousAutoBurnTax = _autoBurnTax; 
+    uint256 private _previousMarketingTax = _marketingTax; 
 
     /*
 
@@ -54,7 +56,7 @@ contract Meefie is Context, IERC20, Ownable {
     
     */
 
-   uint256 private _walletLimitPercentage = 4;
+   uint256 public _walletLimitPercentage = 4;
 
     uint256 public _maxWalletToken = _tTotal.mul(_walletLimitPercentage).div(100);
     uint256 private _previousMaxWalletToken = _maxWalletToken;
@@ -176,12 +178,13 @@ contract Meefie is Context, IERC20, Ownable {
         _isExcludedFromFee[account] = false;
     }
 
-    function setFees(uint256 Buy_Fee, uint256 Sell_Fee) external onlyOwner() {
+    function setFees(uint256 Buy_Fee, uint256 Sell_Fee, uint256 Burn_Fee, uint256 Marketing_Fee) external onlyOwner() {
 
-        require((Buy_Fee + Sell_Fee) <= maxPossibleFee, "Fee is too high!");
+        require((Buy_Fee + Sell_Fee + Burn_Fee + Marketing_Fee) <= maxPossibleFee, "Fee is too high!");
         _sellFee = Sell_Fee;
         _buyFee = Buy_Fee;
-
+        _autoBurnTax = Burn_Fee;
+        _marketingTax = Marketing_Fee;
     }
 
     // Update main wallet
@@ -284,14 +287,18 @@ contract Meefie is Context, IERC20, Ownable {
 
     // Remove all fees
     function removeAllFee() private {
-        if(_TotalFee == 0 && _buyFee == 0 && _sellFee == 0) return;
+        if(_TotalFee == 0 && _buyFee == 0 && _sellFee == 0 && _autoBurnTax == 0 && _marketingTax == 0) return;
 
         _previousBuyFee = _buyFee; 
         _previousSellFee = _sellFee; 
         _previousTotalFee = _TotalFee;
+        _previousAutoBurnTax = _autoBurnTax;
+        _previousMarketingTax = _marketingTax;
         _buyFee = 0;
         _sellFee = 0;
         _TotalFee = 0;
+        _autoBurnTax = 0;
+        _marketingTax = 0;
     }
     
     // Restore all fees
@@ -299,7 +306,8 @@ contract Meefie is Context, IERC20, Ownable {
         _TotalFee = _previousTotalFee;
         _buyFee = _previousBuyFee; 
         _sellFee = _previousSellFee; 
-
+        _autoBurnTax = _previousAutoBurnTax;
+        _marketingTax = _previousMarketingTax;
     }
 
 
@@ -390,7 +398,12 @@ contract Meefie is Context, IERC20, Ownable {
          
         if(_isExcludedFromFee[from] || _isExcludedFromFee[to] || (noFeeToTransfer && from != uniswapV2Pair && to != uniswapV2Pair)){
             takeFee = false;
-        } else if (from == uniswapV2Pair){_TotalFee = _buyFee;} else if (to == uniswapV2Pair){_TotalFee = _sellFee;}
+        } else if (from == uniswapV2Pair) {
+            _TotalFee = _buyFee;
+        } else if (to == uniswapV2Pair) {
+            _TotalFee = _marketingTax;
+            // _TotalFee = _sellFee;
+        }
         
         _tokenTransfer(from,to,amount,takeFee);
     }
@@ -465,23 +478,28 @@ contract Meefie is Context, IERC20, Ownable {
 
     // Check if token transfer needs to process fees
     function _tokenTransfer(address sender, address recipient, uint256 amount,bool takeFee) private {
-        if(!takeFee){
+        if(!takeFee) {
             removeAllFee();
-            } else {
-                txCount++;
-            }
-            _transferTokens(sender, recipient, amount);
+        } else {
+            txCount++;
+        }
+        _transferTokens(sender, recipient, amount);
+        _burnTokens(sender, amount);
         
-        if(!takeFee)
+        if(!takeFee) {
             restoreAllFee();
+        }
     }
 
     // Redistributing tokens and adding the fee to the contract address
     function _transferTokens(address sender, address recipient, uint256 tAmount) private {
         (uint256 tTransferAmount, uint256 tDev) = _getValues(tAmount);
+
         _tOwned[sender] = _tOwned[sender].sub(tAmount);
         _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
         _tOwned[address(this)] = _tOwned[address(this)].add(tDev);   
+
+
         emit Transfer(sender, recipient, tTransferAmount);
     }
 
@@ -492,30 +510,23 @@ contract Meefie is Context, IERC20, Ownable {
         return (tTransferAmount, tDev);
     }
 
-    function getWalletLimitPercentage() public view onlyOwner returns(uint256) {
-        return _walletLimitPercentage;
+    // TODO: do the burn transfer
+    function _burnTokens(address sender, uint256 tAmount) private {
+        uint256 tBurnAmount = _getBurnValues(tAmount);
+
+        _tOwned[sender] = _tOwned[sender].sub(tAmount);
+        _tOwned[_burnWallet] = _tOwned[_burnWallet].add(tBurnAmount);
+
+        emit Transfer(sender, _burnWallet, tBurnAmount);
+    }
+
+    function _getBurnValues(uint256 tAmount) private view returns (uint256) {
+        uint256 tDev = tAmount*_autoBurnTax/100;
+        uint256 tBurnAmount = tAmount.sub(tDev);
+        return (tBurnAmount);
     }
 
     function setWalletLimitPercentage(uint256 value) public onlyOwner() {
         _walletLimitPercentage = value;
-    }
-
-    /*
-        TAXES COFIGURATION
-    */
-    function getBurnTax() public view onlyOwner returns(uint256) {
-        return _autoBurnTax;
-    }
-
-    function setAutoBurnTax(uint256 value) public onlyOwner() {
-        _autoBurnTax = value;
-    }
-
-    function getMarketingTax() public view onlyOwner returns(uint256) {
-        return _marketingTax;
-    }
-
-    function setMarketingTax(uint256 value) public onlyOwner() {
-        _marketingTax = value;
     }
 }
