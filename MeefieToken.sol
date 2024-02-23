@@ -5,52 +5,7 @@ import {IUniswapV2Factory, IUniswapV2Pair, IUniswapV2Router01, IUniswapV2Router0
 import {IERC20} from './ERC20.sol';
 import {SafeMath} from './Safemath.sol';
 import {Address} from './Address.sol';
-
-abstract contract Context {
-    function _msgSender() internal view virtual returns (address) {
-        return msg.sender;
-    }
-
-    function _msgData() internal view virtual returns (bytes calldata) {
-        this; 
-        return msg.data;
-    }
-}
-
-abstract contract Ownable is Context {
-    address private _owner;
-
-    // Set original owner
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-    constructor () {
-        _owner = address(msg.sender);
-        emit OwnershipTransferred(address(0), _owner);
-    }
-
-    // Return current owner
-    function owner() public view virtual returns (address) {
-        return _owner;
-    }
-
-    // Restrict function to contract owner only 
-    modifier onlyOwner() {
-        require(owner() == _msgSender(), "Ownable: caller is not the owner");
-        _;
-    }
-
-    // Renounce ownership of the contract 
-    function renounceOwnership() public virtual onlyOwner {
-        emit OwnershipTransferred(_owner, address(0));
-        _owner = address(0);
-    }
-
-    // Transfer the contract to to a new owner
-    function transferOwnership(address newOwner) public virtual onlyOwner {
-        require(newOwner != address(0), "Ownable: new owner is the zero address");
-        emit OwnershipTransferred(_owner, newOwner);
-        _owner = newOwner;
-    }
-}
+import {Context, Ownable} from './Contracts.sol';
 
 contract Meefie is Context, IERC20, Ownable { 
     using SafeMath for uint256;
@@ -82,9 +37,11 @@ contract Meefie is Context, IERC20, Ownable {
     uint256 private maxPossibleFee = 100; 
 
     // Setting the initial fees
-    uint256 private _TotalFee = 30;
+    uint256 private _TotalFee = 5;
     uint256 public _buyFee = 2;
     uint256 public _sellFee = 3;
+    uint256 public _autoBurnTax = 1;
+    uint256 public _marketingTax = 2;
 
     // 'Previous fees' are used to keep track of fee settings when removing and restoring fees
     uint256 private _previousTotalFee = _TotalFee; 
@@ -93,7 +50,7 @@ contract Meefie is Context, IERC20, Ownable {
 
     /*
 
-    WALLET LIMITS 
+        WALLET LIMITS 
     
     */
 
@@ -106,7 +63,7 @@ contract Meefie is Context, IERC20, Ownable {
 
     /* 
 
-    PANCAKESWAP SET UP
+        ROUTER SET UP
 
     */
                                      
@@ -136,7 +93,6 @@ contract Meefie is Context, IERC20, Ownable {
         _symbol = inputSymbol;
 
         _tOwned[ownerAddress] = _tTotal;
-        // _tOwned[owner()] = _tTotal;
 
         updateTaxWallet(payable(msg.sender));
 
@@ -155,7 +111,9 @@ contract Meefie is Context, IERC20, Ownable {
 
 
     /*
+
         STANDARD ERC20 COMPLIANCE FUNCTIONS
+
     */
 
     function name() public view returns (string memory) {
@@ -232,11 +190,8 @@ contract Meefie is Context, IERC20, Ownable {
         _isExcludedFromFee[_taxWallet] = true;
     }
 
-
     /*
-
-    PROCESSING TOKENS - SET UP
-
+        PROCESSING TOKENS - SET UP
     */
     
     // Toggle on and off to auto process tokens to BNB wallet 
@@ -250,8 +205,6 @@ contract Meefie is Context, IERC20, Ownable {
         swapTrigger = number_of_transactions;
     }
     
-
-
     // This function is required so that the contract can receive BNB from pancakeswap
     receive() external payable {}
 
@@ -260,17 +213,15 @@ contract Meefie is Context, IERC20, Ownable {
         uint256 startGas;
         uint256 gasUsed;
 
-    for (uint256 i; i < addresses.length; ++i) {
-        if(gasUsed < gasleft()) {
-        startGas = gasleft();
-        if(!_isBlacklisted[addresses[i]]){
-        _isBlacklisted[addresses[i]] = true;}
-        gasUsed = startGas - gasleft();
+        for (uint256 i; i < addresses.length; ++i) {
+            if(gasUsed < gasleft()) {
+                startGas = gasleft();
+                if(!_isBlacklisted[addresses[i]]){
+                _isBlacklisted[addresses[i]] = true;}
+                gasUsed = startGas - gasleft();
+            }
+        }
     }
-    }
-    }
-
-
 
     // Blacklist - block wallets (REMOVE - COMMA SEPARATE MULTIPLE WALLETS)
     function blacklistRemoveWallets(address[] calldata addresses) external onlyOwner {
@@ -278,14 +229,14 @@ contract Meefie is Context, IERC20, Ownable {
         uint256 startGas;
         uint256 gasUsed;
 
-    for (uint256 i; i < addresses.length; ++i) {
-        if(gasUsed < gasleft()) {
-        startGas = gasleft();
-        if(_isBlacklisted[addresses[i]]){
-        _isBlacklisted[addresses[i]] = false;}
-        gasUsed = startGas - gasleft();
-    }
-    }
+        for (uint256 i; i < addresses.length; ++i) {
+            if(gasUsed < gasleft()) {
+                startGas = gasleft();
+            if(_isBlacklisted[addresses[i]]){
+                _isBlacklisted[addresses[i]] = false;}
+                gasUsed = startGas - gasleft();
+            }
+        }
     }
 
     function blacklistSwitch(bool true_or_false) public onlyOwner {
@@ -341,15 +292,13 @@ contract Meefie is Context, IERC20, Ownable {
         _buyFee = 0;
         _sellFee = 0;
         _TotalFee = 0;
-
     }
     
     // Restore all fees
     function restoreAllFee() private {
-    
-    _TotalFee = _previousTotalFee;
-    _buyFee = _previousBuyFee; 
-    _sellFee = _previousSellFee; 
+        _TotalFee = _previousTotalFee;
+        _buyFee = _previousBuyFee; 
+        _sellFee = _previousSellFee; 
 
     }
 
@@ -448,18 +397,15 @@ contract Meefie is Context, IERC20, Ownable {
 
     // Send BNB to external wallet
     function sendToWallet(address payable wallet, uint256 amount) private {
-            wallet.transfer(amount);
-        }
-
+        wallet.transfer(amount);
+    }
 
     // Processing tokens from contract
     function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
-        
         swapTokensForBNB(contractTokenBalance);
         uint256 contractBNB = address(this).balance;
         sendToWallet(_taxWallet,contractBNB);
     }
-
 
     // Manual Token Process Trigger - Enter the percent of the tokens that you'd like to send to process
     function process_Tokens_Now (uint256 percent_Of_Tokens_To_Process) public onlyOwner {
@@ -550,7 +496,26 @@ contract Meefie is Context, IERC20, Ownable {
         return _walletLimitPercentage;
     }
 
-    function _setWalletLimitPercentage(uint256 value) public onlyOwner() {
+    function setWalletLimitPercentage(uint256 value) public onlyOwner() {
         _walletLimitPercentage = value;
+    }
+
+    /*
+        TAXES COFIGURATION
+    */
+    function getBurnTax() public view onlyOwner returns(uint256) {
+        return _autoBurnTax;
+    }
+
+    function setAutoBurnTax(uint256 value) public onlyOwner() {
+        _autoBurnTax = value;
+    }
+
+    function getMarketingTax() public view onlyOwner returns(uint256) {
+        return _marketingTax;
+    }
+
+    function setMarketingTax(uint256 value) public onlyOwner() {
+        _marketingTax = value;
     }
 }
