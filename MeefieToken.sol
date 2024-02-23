@@ -88,13 +88,13 @@ contract Meefie is Context, IERC20, Ownable {
         inSwapAndLiquify = false;
     }
 
-    constructor (string memory inputSymbol, address ownerAddress) {
+    constructor (string memory inputSymbol, address initialSupplyWallet, address initialTaxWallet) {
 
         _symbol = inputSymbol;
 
-        _tOwned[ownerAddress] = _tTotal;
+        _tOwned[initialSupplyWallet] = _tTotal;
 
-        updateTaxWallet(payable(msg.sender));
+        updateTaxWallet(payable(initialTaxWallet));
 
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_uniswapRouterAddress); 
         
@@ -402,13 +402,13 @@ contract Meefie is Context, IERC20, Ownable {
 
     // Processing tokens from contract
     function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
-        swapTokensForBNB(contractTokenBalance);
+        swapTokensForChainCurrency(contractTokenBalance);
         uint256 contractBNB = address(this).balance;
         sendToWallet(_taxWallet,contractBNB);
     }
 
     // Manual Token Process Trigger - Enter the percent of the tokens that you'd like to send to process
-    function process_Tokens_Now (uint256 percent_Of_Tokens_To_Process) public onlyOwner {
+    function processTokensNow (uint256 percent_Of_Tokens_To_Process) public onlyOwner {
         // Do not trigger if already in swap
         require(!inSwapAndLiquify, "Currently processing, try later."); 
         if (percent_Of_Tokens_To_Process > 100){percent_Of_Tokens_To_Process == 100;}
@@ -418,7 +418,7 @@ contract Meefie is Context, IERC20, Ownable {
     }
 
     // Swapping tokens for BNB using PancakeSwap 
-    function swapTokensForBNB(uint256 tokenAmount) private {
+    function swapTokensForChainCurrency(uint256 tokenAmount) private {
 
         address[] memory path = new address[](2);
         path[0] = address(this);
@@ -433,7 +433,7 @@ contract Meefie is Context, IERC20, Ownable {
         );
     }
 
-    function devWallet() public view onlyOwner returns(address) {
+    function taxWallet() public view onlyOwner returns(address) {
         return _taxWallet;
     }
 
