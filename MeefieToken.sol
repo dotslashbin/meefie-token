@@ -22,7 +22,7 @@ contract Meefie is Context, IERC20, Ownable {
     address payable private _burnWallet = payable(0x000000000000000000000000000000000000dEaD); 
     address payable private _zeroWallet = payable(0x0000000000000000000000000000000000000000); 
 
-    string private _name = "Meefie"; 
+    string private _name = "MeefieTest"; 
     string private _symbol; 
     uint8 private _decimals = 18;
     uint256 private _tTotal = 1000000000 * 10**_decimals;
@@ -39,14 +39,12 @@ contract Meefie is Context, IERC20, Ownable {
     // Setting the initial fees
     uint256 private _TotalFee = 5;
     uint256 public _buyFee = 2;
-    uint256 public _sellFee = 3;
     uint256 public _autoBurnTax = 1;
     uint256 public _marketingTax = 2;
 
     // 'Previous fees' are used to keep track of fee settings when removing and restoring fees
     uint256 private _previousTotalFee = _TotalFee; 
     uint256 private _previousBuyFee = _buyFee; 
-    uint256 private _previousSellFee = _sellFee; 
     uint256 private _previousAutoBurnTax = _autoBurnTax; 
     uint256 private _previousMarketingTax = _marketingTax; 
 
@@ -181,7 +179,6 @@ contract Meefie is Context, IERC20, Ownable {
     function setFees(uint256 Buy_Fee, uint256 Sell_Fee, uint256 Burn_Fee, uint256 Marketing_Fee) external onlyOwner() {
 
         require((Buy_Fee + Sell_Fee + Burn_Fee + Marketing_Fee) <= maxPossibleFee, "Fee is too high!");
-        _sellFee = Sell_Fee;
         _buyFee = Buy_Fee;
         _autoBurnTax = Burn_Fee;
         _marketingTax = Marketing_Fee;
@@ -287,15 +284,13 @@ contract Meefie is Context, IERC20, Ownable {
 
     // Remove all fees
     function removeAllFee() private {
-        if(_TotalFee == 0 && _buyFee == 0 && _sellFee == 0 && _autoBurnTax == 0 && _marketingTax == 0) return;
+        if(_TotalFee == 0 && _buyFee == 0 && _autoBurnTax == 0 && _marketingTax == 0) return;
 
         _previousBuyFee = _buyFee; 
-        _previousSellFee = _sellFee; 
         _previousTotalFee = _TotalFee;
         _previousAutoBurnTax = _autoBurnTax;
         _previousMarketingTax = _marketingTax;
         _buyFee = 0;
-        _sellFee = 0;
         _TotalFee = 0;
         _autoBurnTax = 0;
         _marketingTax = 0;
@@ -305,7 +300,6 @@ contract Meefie is Context, IERC20, Ownable {
     function restoreAllFee() private {
         _TotalFee = _previousTotalFee;
         _buyFee = _previousBuyFee; 
-        _sellFee = _previousSellFee; 
         _autoBurnTax = _previousAutoBurnTax;
         _marketingTax = _previousMarketingTax;
     }
@@ -402,7 +396,6 @@ contract Meefie is Context, IERC20, Ownable {
             _TotalFee = _buyFee;
         } else if (to == uniswapV2Pair) {
             _TotalFee = _marketingTax;
-            // _TotalFee = _sellFee;
         }
         
         _tokenTransfer(from,to,amount,takeFee);
