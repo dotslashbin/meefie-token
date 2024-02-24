@@ -49,12 +49,10 @@ contract MeeFie is Context, IERC20, Ownable {
     uint256 private _previousMarketingTax = _marketingTax; 
 
     /*
-
         WALLET LIMITS 
-    
     */
 
-   uint256 public _walletLimitPercentage = 4;
+    uint256 public _walletLimitPercentage = 4;
 
     uint256 public _maxWalletToken = _tTotal.mul(_walletLimitPercentage).div(100);
     uint256 private _previousMaxWalletToken = _maxWalletToken;
@@ -62,9 +60,7 @@ contract MeeFie is Context, IERC20, Ownable {
     uint256 private _previousMaxTxAmount = _maxTxAmount;
 
     /* 
-
         ROUTER SET UP
-
     */
                                      
     IUniswapV2Router02 public uniswapV2Router;
@@ -111,9 +107,7 @@ contract MeeFie is Context, IERC20, Ownable {
 
 
     /*
-
         STANDARD ERC20 COMPLIANCE FUNCTIONS
-
     */
 
     function name() public view returns (string memory) {
@@ -176,9 +170,9 @@ contract MeeFie is Context, IERC20, Ownable {
         _isExcludedFromFee[account] = false;
     }
 
-    function setFees(uint256 Buy_Fee, uint256 Sell_Fee, uint256 Burn_Fee, uint256 Marketing_Fee) external onlyOwner() {
+    function setFees(uint256 Buy_Fee, uint256 Burn_Fee, uint256 Marketing_Fee) external onlyOwner() {
 
-        require((Buy_Fee + Sell_Fee + Burn_Fee + Marketing_Fee) <= maxPossibleFee, "Fee is too high!");
+        require((Buy_Fee + Burn_Fee + Marketing_Fee) <= maxPossibleFee, "Fee is too high!");
         _buyFee = Buy_Fee;
         _autoBurnTax = Burn_Fee;
         _marketingTax = Marketing_Fee;
@@ -254,20 +248,7 @@ contract MeeFie is Context, IERC20, Ownable {
     }
 
     /*
-
-    WALLET LIMITS
-
-    Wallets are limited in two ways. The amount of tokens that can be purchased in one transaction
-    and the total amount of tokens a wallet can buy. Limiting a wallet prevents one wallet from holding too
-    many tokens, which can scare away potential buyers that worry that a whale might dump!
-
-    IMPORTANT
-
-    Solidity can not process decimals, so to increase flexibility, we multiple everything by 100.
-    When entering the percent, you need to shift your decimal two steps to the right.
-
-    eg: For 4% enter 400, for 1% enter 100, for 0.25% enter 25, for 0.2% enter 20 etc!
-
+        WALLET LIMITS
     */
 
     // Set the Max transaction amount (percent of total supply)
@@ -279,8 +260,6 @@ contract MeeFie is Context, IERC20, Ownable {
      function set_Max_Wallet_Percent(uint256 maxWallPercent_x100) external onlyOwner() {
         _maxWalletToken = _tTotal*maxWallPercent_x100/10000;
     }
-
-
 
     // Remove all fees
     function removeAllFee() private {
@@ -503,7 +482,6 @@ contract MeeFie is Context, IERC20, Ownable {
         return (tTransferAmount, tDev);
     }
 
-    // TODO: do the burn transfer
     function _burnTokens(address sender, uint256 tAmount) private {
         uint256 tBurnAmount = _getBurnValues(tAmount);
 
@@ -513,6 +491,7 @@ contract MeeFie is Context, IERC20, Ownable {
         emit Transfer(sender, _burnWallet, tBurnAmount);
     }
 
+    // Calculating burn fee in tokens
     function _getBurnValues(uint256 tAmount) private view returns (uint256) {
         uint256 tDev = tAmount*_autoBurnTax/100;
         uint256 tBurnAmount = tAmount.sub(tDev);
