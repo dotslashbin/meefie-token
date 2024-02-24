@@ -170,9 +170,9 @@ contract MeeFie is Context, IERC20, Ownable {
         _isExcludedFromFee[account] = false;
     }
 
-    function setFees(uint256 Buy_Fee, uint256 Sell_Fee, uint256 Burn_Fee, uint256 Marketing_Fee) external onlyOwner() {
+    function setFees(uint256 Buy_Fee, uint256 Burn_Fee, uint256 Marketing_Fee) external onlyOwner() {
 
-        require((Buy_Fee + Sell_Fee + Burn_Fee + Marketing_Fee) <= maxPossibleFee, "Fee is too high!");
+        require((Buy_Fee + Burn_Fee + Marketing_Fee) <= maxPossibleFee, "Fee is too high!");
         _buyFee = Buy_Fee;
         _autoBurnTax = Burn_Fee;
         _marketingTax = Marketing_Fee;
