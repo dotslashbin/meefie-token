@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.17;
+pragma solidity 0.8.24;
 
 abstract contract Context {
     function _msgSender() internal view virtual returns (address) {
