@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity 0.8.24;
 
-import {IUniswapV2Factory, IUniswapV2Pair, IUniswapV2Router01, IUniswapV2Router02} from './Uniswap.sol';
+import {IUniswapV2Factory, IUniswapV2Router02} from './Uniswap.sol';
 import {IERC20} from './ERC20.sol';
 import {SafeMath} from './Safemath.sol';
 import {Address} from './Address.sol';
