@@ -94,7 +94,7 @@ contract MeeFie is Context, IERC20, Ownable {
 
         IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_uniswapRouterAddress); 
         
-        // Create pair address for PancakeSwap
+        // Create pair address for router
         uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
             .createPair(address(this), _uniswapV2Router.WETH());
         uniswapV2Router = _uniswapV2Router;
@@ -188,7 +188,7 @@ contract MeeFie is Context, IERC20, Ownable {
         PROCESSING TOKENS - SET UP
     */
     
-    // Toggle on and off to auto process tokens to BNB wallet 
+    // Toggle on and off to auto process tokens to wallet (Chain currency)
     function setSwapAndLiquifyEnabled(bool true_or_false) public onlyOwner {
         swapAndLiquifyEnabled = true_or_false;
         emit SwapAndLiquifyEnabledUpdated(true_or_false);
@@ -199,7 +199,7 @@ contract MeeFie is Context, IERC20, Ownable {
         swapTrigger = number_of_transactions;
     }
     
-    // This function is required so that the contract can receive BNB from pancakeswap
+    // This function is required so that the contract can receive chain currency from router
     receive() external payable {}
 
     function blacklistAddWallets(address[] calldata addresses) external onlyOwner {
@@ -380,7 +380,7 @@ contract MeeFie is Context, IERC20, Ownable {
         _tokenTransfer(from,to,amount,takeFee);
     }
 
-    // Send BNB to external wallet
+    // Send chain currency to external wallet
     function sendToWallet(address payable wallet, uint256 amount) private {
         wallet.transfer(amount);
     }
@@ -388,8 +388,8 @@ contract MeeFie is Context, IERC20, Ownable {
     // Processing tokens from contract
     function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
         swapTokensForChainCurrency(contractTokenBalance);
-        uint256 contractBNB = address(this).balance;
-        sendToWallet(_taxWallet,contractBNB);
+        uint256 contractBalanceInChainCurrency = address(this).balance;
+        sendToWallet(_taxWallet, contractBalanceInChainCurrency);
     }
 
     // Manual Token Process Trigger - Enter the percent of the tokens that you'd like to send to process
@@ -402,7 +402,7 @@ contract MeeFie is Context, IERC20, Ownable {
         swapAndLiquify(sendTokens);
     }
 
-    // Swapping tokens for BNB using PancakeSwap 
+    // Swapping tokens for chain currency using the router 
     function swapTokensForChainCurrency(uint256 tokenAmount) private {
 
         address[] memory path = new address[](2);
