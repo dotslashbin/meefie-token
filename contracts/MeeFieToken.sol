@@ -1,15 +1,35 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: GPL
+// Compatible with OpenZeppelin Contracts ^5.0.0
 pragma solidity 0.8.24;
 
-import {IUniswapV2Factory, IUniswapV2Router02} from './Uniswap.sol';
-import {IERC20} from './ERC20.sol';
-import {SafeMath} from './Safemath.sol';
-import {Address} from './Address.sol';
-import {Context, Ownable} from './Contracts.sol';
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "hardhat/console.sol";
+import { IUniswapV2Router02 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 
-contract MeeFie is Context, IERC20, Ownable { 
-    using SafeMath for uint256;
-    using Address for address;
+
+interface IUniswapV2Factory {
+    event PairCreated(address indexed token0, address indexed token1, address pair, uint);
+
+    function feeTo() external view returns (address);
+    function feeToSetter() external view returns (address);
+
+    function createPair(address tokenA, address tokenB) external returns (address pair);
+
+    function getPair(address tokenA, address tokenB) external view returns (address pair);
+    function allPairs(uint) external view returns (address pair);
+    function allPairsLength() external view returns (uint);
+
+    function setFeeTo(address) external;
+    function setFeeToSetter(address) external;
+}
+
+
+contract MeeFieToken is ERC20, ERC20Burnable, Ownable {
+
+    string private _name = 'Meefie';
+    string private _symbol = 'MFT';
 
     mapping (address => uint256) private _tOwned;
     mapping (address => mapping (address => uint256)) private _allowances;
@@ -17,13 +37,12 @@ contract MeeFie is Context, IERC20, Ownable {
     mapping (address => bool) public _isBlacklisted;
 
     bool public noBlackList;
-   
-    address payable private _taxWallet;
+    // Wallets default
+    address payable public _taxWallet;
     address payable private _burnWallet = payable(0x000000000000000000000000000000000000dEaD); 
     address payable private _zeroWallet = payable(0x0000000000000000000000000000000000000000); 
 
-    string private _name = "MeeFie"; 
-    string private _symbol; 
+    
     uint8 private _decimals = 18;
     uint256 private _tTotal = 1000000000 * 10**_decimals;
     uint256 private _tFeeTotal;
@@ -54,27 +73,27 @@ contract MeeFie is Context, IERC20, Ownable {
 
     uint256 public _walletLimitPercentage = 4;
 
-    uint256 public _maxWalletToken = _tTotal.mul(_walletLimitPercentage).div(100);
+    uint256 public _maxWalletToken = (_tTotal * _walletLimitPercentage) / 100;
     uint256 private _previousMaxWalletToken = _maxWalletToken;
-    uint256 public _maxTxAmount = _tTotal.mul(_walletLimitPercentage).div(100); 
+    uint256 public _maxTxAmount = (_tTotal * _walletLimitPercentage) / 100; 
     uint256 private _previousMaxTxAmount = _maxTxAmount;
 
     /* 
         ROUTER SET UP
     */
-                                     
     IUniswapV2Router02 public uniswapV2Router;
     address private _uniswapRouterAddress = 0xa5E0829CaCEd8fFDD4De3c43696c57F7D7A678ff;
     address public uniswapV2Pair;
     bool public inSwapAndLiquify;
     bool public swapAndLiquifyEnabled = true;
+
+    
     
     event SwapAndLiquifyEnabledUpdated(bool enabled);
     event SwapAndLiquify(
         uint256 tokensSwapped,
         uint256 ethReceived,
         uint256 tokensIntoLiqudity
-        
     );
     
     // Prevent processing while already processing! 
@@ -84,80 +103,14 @@ contract MeeFie is Context, IERC20, Ownable {
         inSwapAndLiquify = false;
     }
 
-    constructor (string memory inputSymbol, address initialSupplyWallet, address initialTaxWallet) {
-
-        _symbol = inputSymbol;
-
-        _tOwned[initialSupplyWallet] = _tTotal;
-
-        updateTaxWallet(payable(initialTaxWallet));
-
-        IUniswapV2Router02 _uniswapV2Router = IUniswapV2Router02(_uniswapRouterAddress); 
-        
-        // Create pair address for router
-        uniswapV2Pair = IUniswapV2Factory(_uniswapV2Router.factory())
-            .createPair(address(this), _uniswapV2Router.WETH());
-        uniswapV2Router = _uniswapV2Router;
-        _isExcludedFromFee[owner()] = true;
-        _isExcludedFromFee[address(this)] = true;
-        _isExcludedFromFee[_taxWallet] = true;
-
-        emit Transfer(address(0), owner(), _tTotal);
+    constructor(address initialOwner)
+        ERC20(_name, _symbol)
+        Ownable(initialOwner)
+    {
     }
 
-
-    /*
-        STANDARD ERC20 COMPLIANCE FUNCTIONS
-    */
-
-    function name() public view returns (string memory) {
-        return _name;
-    }
-
-    function symbol() public view returns (string memory) {
-        return _symbol;
-    }
-
-    function decimals() public view returns (uint8) {
-        return _decimals;
-    }
-
-    function totalSupply() public view override returns (uint256) {
-        return _tTotal;
-    }
-
-    function balanceOf(address account) public view override returns (uint256) {
-        return _tOwned[account];
-    }
-
-    function transfer(address recipient, uint256 amount) public override returns (bool) {
-        _transfer(_msgSender(), recipient, amount);
-        return true;
-    }
-
-    function allowance(address owner, address spender) public view override returns (uint256) {
-        return _allowances[owner][spender];
-    }
-
-    function approve(address spender, uint256 amount) public override returns (bool) {
-        _approve(_msgSender(), spender, amount);
-        return true;
-    }
-
-    function transferFrom(address sender, address recipient, uint256 amount) public override returns (bool) {
-        _transfer(sender, recipient, amount);
-        _approve(sender, _msgSender(), _allowances[sender][_msgSender()].sub(amount, "ERC20: transfer amount exceeds allowance"));
-        return true;
-    }
-     
-    function increaseAllowance(address spender, uint256 addedValue) public virtual returns (bool) {
-        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].add(addedValue));
-        return true;
-    }
-
-    function decreaseAllowance(address spender, uint256 subtractedValue) public virtual returns (bool) {
-        _approve(_msgSender(), spender, _allowances[_msgSender()][spender].sub(subtractedValue, "ERC20: decreased allowance below zero"));
-        return true;
+    function mint(address to, uint256 amount) public onlyOwner {
+        _mint(to, amount);
     }
 
     // Set a wallet address so that it does not have to pay transaction fees
@@ -283,102 +236,8 @@ contract MeeFie is Context, IERC20, Ownable {
         _marketingTax = _previousMarketingTax;
     }
 
-
-    // Approve a wallet to sell tokens
-    function _approve(address owner, address spender, uint256 amount) private {
-
-        require(owner != address(0) && spender != address(0), "ERR: zero address");
-        _allowances[owner][spender] = amount;
-        emit Approval(owner, spender, amount);
-
-    }
-
-    function _transfer(
-        address from,
-        address to,
-        uint256 amount
-    ) private {
-        
-
-        /*
-            TRANSACTION AND WALLET LIMITS
-        */
-        
-
-        // Limit wallet total
-        if (to != owner() &&
-            to != _taxWallet &&
-            to != address(this) &&
-            to != uniswapV2Pair &&
-            to != _burnWallet &&
-            from != owner()){
-            uint256 heldTokens = balanceOf(to);
-            require((heldTokens + amount) <= _maxWalletToken,"You are trying to buy too many tokens. You have reached the limit for one wallet.");}
-
-
-        // Limit the maximum number of tokens that can be bought or sold in one transaction
-        if (from != owner() && to != owner())
-            require(amount <= _maxTxAmount, "You are trying to buy more than the max transaction limit.");
-
-
-
-        /*
-            BLACKLIST RESTRICTIONS
-        */
-        
-        if (noBlackList){
-        require(!_isBlacklisted[from] && !_isBlacklisted[to], "This address is blacklisted. Transaction reverted.");}
-
-
-        require(from != address(0) && to != address(0), "ERR: Using 0 address!");
-        require(amount > 0, "Token value must be higher than zero.");
-
-
-        /*
-            PROCESSING
-        */
-
-
-        // SwapAndLiquify is triggered after every X transactions - this number can be adjusted using swapTrigger
-
-        if(
-            txCount >= swapTrigger && 
-            !inSwapAndLiquify &&
-            from != uniswapV2Pair &&
-            swapAndLiquifyEnabled 
-            )
-        {  
-            
-            txCount = 0;
-            uint256 contractTokenBalance = balanceOf(address(this));
-            if(contractTokenBalance > _maxTxAmount) {contractTokenBalance = _maxTxAmount;}
-            if(contractTokenBalance > 0){
-            swapAndLiquify(contractTokenBalance);
-        }
-        }
-
-
-        /*
-            REMOVE FEES IF REQUIRED
-
-            Fee removed if the to or from address is excluded from fee.
-            Fee removed if the transfer is NOT a buy or sell.
-            Change fee amount for buy or sell.
-        */
-
-        
-        bool takeFee = true;
-         
-        if(_isExcludedFromFee[from] || _isExcludedFromFee[to] || (noFeeToTransfer && from != uniswapV2Pair && to != uniswapV2Pair)){
-            takeFee = false;
-        } else if (from == uniswapV2Pair) {
-            _TotalFee = _buyFee;
-        } else if (to == uniswapV2Pair) {
-            _TotalFee = _marketingTax;
-        }
-        
-        _tokenTransfer(from,to,amount,takeFee);
-    }
+    // TODO: DO TRANSFER here
+    
 
     // Send chain currency to external wallet
     function sendToWallet(address payable wallet, uint256 amount) private {
@@ -467,9 +326,9 @@ contract MeeFie is Context, IERC20, Ownable {
     function _transferTokens(address sender, address recipient, uint256 tAmount) private {
         (uint256 tTransferAmount, uint256 tDev) = _getValues(tAmount);
 
-        _tOwned[sender] = _tOwned[sender].sub(tAmount);
-        _tOwned[recipient] = _tOwned[recipient].add(tTransferAmount);
-        _tOwned[address(this)] = _tOwned[address(this)].add(tDev);   
+        _tOwned[sender] = _tOwned[sender] - tAmount;
+        _tOwned[recipient] = _tOwned[recipient] + tTransferAmount;
+        _tOwned[address(this)] = _tOwned[address(this)] + (tDev);   
 
 
         emit Transfer(sender, recipient, tTransferAmount);
@@ -478,15 +337,15 @@ contract MeeFie is Context, IERC20, Ownable {
     // Calculating the fee in tokens
     function _getValues(uint256 tAmount) private view returns (uint256, uint256) {
         uint256 tDev = tAmount*_TotalFee/100;
-        uint256 tTransferAmount = tAmount.sub(tDev);
+        uint256 tTransferAmount = tAmount - tDev;
         return (tTransferAmount, tDev);
     }
 
     function _burnTokens(address sender, uint256 tAmount) private {
         uint256 tBurnAmount = _getBurnValues(tAmount);
 
-        _tOwned[sender] = _tOwned[sender].sub(tAmount);
-        _tOwned[_burnWallet] = _tOwned[_burnWallet].add(tBurnAmount);
+        _tOwned[sender] = _tOwned[sender] - tAmount;
+        _tOwned[_burnWallet] = _tOwned[_burnWallet] + tBurnAmount;
 
         emit Transfer(sender, _burnWallet, tBurnAmount);
     }
@@ -494,7 +353,7 @@ contract MeeFie is Context, IERC20, Ownable {
     // Calculating burn fee in tokens
     function _getBurnValues(uint256 tAmount) private view returns (uint256) {
         uint256 tDev = tAmount*_autoBurnTax/100;
-        uint256 tBurnAmount = tAmount.sub(tDev);
+        uint256 tBurnAmount = tAmount - tDev;
         return (tBurnAmount);
     }
 
