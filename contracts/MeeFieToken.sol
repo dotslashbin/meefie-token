@@ -7,24 +7,7 @@ import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "hardhat/console.sol";
 import { IUniswapV2Router02 } from "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
-
-
-interface IUniswapV2Factory {
-    event PairCreated(address indexed token0, address indexed token1, address pair, uint);
-
-    function feeTo() external view returns (address);
-    function feeToSetter() external view returns (address);
-
-    function createPair(address tokenA, address tokenB) external returns (address pair);
-
-    function getPair(address tokenA, address tokenB) external view returns (address pair);
-    function allPairs(uint) external view returns (address pair);
-    function allPairsLength() external view returns (uint);
-
-    function setFeeTo(address) external;
-    function setFeeToSetter(address) external;
-}
-
+import { IUniswapV2Factory } from './Interfaces.sol';
 
 contract MeeFieToken is ERC20, ERC20Burnable, Ownable {
 
@@ -39,9 +22,7 @@ contract MeeFieToken is ERC20, ERC20Burnable, Ownable {
     bool public noBlackList;
     // Wallets default
     address payable public _taxWallet;
-    address payable private _burnWallet = payable(0x000000000000000000000000000000000000dEaD); 
     address payable private _zeroWallet = payable(0x0000000000000000000000000000000000000000); 
-
     
     uint8 private _decimals = 18;
     uint256 private _tTotal = 1000000000 * 10**_decimals;
@@ -236,7 +217,88 @@ contract MeeFieToken is ERC20, ERC20Burnable, Ownable {
         _marketingTax = _previousMarketingTax;
     }
 
-    // TODO: DO TRANSFER here
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
+        _MeeFieTransfer(_msgSender(), recipient, amount);
+        return true;
+    }
+
+    function _MeeFieTransfer(
+        address from,
+        address to,
+        uint256 amount
+    ) private {
+
+        /*
+            TRANSACTION AND WALLET LIMITS
+        */
+
+        // Limit wallet total
+        if (to != owner() &&
+            to != _taxWallet &&
+            to != address(this) &&
+            to != uniswapV2Pair &&
+            from != owner()){
+            uint256 heldTokens = balanceOf(to);
+            require((heldTokens + amount) <= _maxWalletToken,"You are trying to buy too many tokens. You have reached the limit for one wallet.");}
+
+
+        // Limit the maximum number of tokens that can be bought or sold in one transaction
+        if (from != owner() && to != owner())
+            require(amount <= _maxTxAmount, "You are trying to buy more than the max transaction limit.");
+
+        /*
+            BLACKLIST RESTRICTIONS
+        */
+        
+        if (noBlackList){
+        require(!_isBlacklisted[from] && !_isBlacklisted[to], "This address is blacklisted. Transaction reverted.");}
+
+        require(from != address(0) && to != address(0), "ERR: Using 0 address!");
+        require(amount > 0, "Token value must be higher than zero.");
+
+        /*
+            PROCESSING
+        */
+
+        // SwapAndLiquify is triggered after every X transactions - this number can be adjusted using swapTrigger
+
+        if(
+            txCount >= swapTrigger && 
+            !inSwapAndLiquify &&
+            from != uniswapV2Pair &&
+            swapAndLiquifyEnabled 
+            )
+        {  
+            
+            txCount = 0;
+            uint256 contractTokenBalance = balanceOf(address(this));
+            if(contractTokenBalance > _maxTxAmount) {contractTokenBalance = _maxTxAmount;}
+            if(contractTokenBalance > 0){
+            swapAndLiquify(contractTokenBalance);
+        }
+        }
+
+        /*
+            REMOVE FEES IF REQUIRED
+
+            Fee removed if the to or from address is excluded from fee.
+            Fee removed if the transfer is NOT a buy or sell.
+            Change fee amount for buy or sell.
+        */
+
+        
+        bool takeFee = true;
+         
+        if(_isExcludedFromFee[from] || _isExcludedFromFee[to] || (noFeeToTransfer && from != uniswapV2Pair && to != uniswapV2Pair)){
+            takeFee = false;
+        } else if (from == uniswapV2Pair) {
+            _TotalFee = _buyFee;
+        } else if (to == uniswapV2Pair) {
+            _TotalFee = _marketingTax;
+        }
+        
+        _tokenTransfer(from,to,amount,takeFee);
+    }
     
 
     // Send chain currency to external wallet
@@ -315,7 +377,7 @@ contract MeeFieToken is ERC20, ERC20Burnable, Ownable {
             txCount++;
         }
         _transferTokens(sender, recipient, amount);
-        _burnTokens(sender, amount);
+        super._burn(sender, amount);
         
         if(!takeFee) {
             restoreAllFee();
@@ -339,15 +401,6 @@ contract MeeFieToken is ERC20, ERC20Burnable, Ownable {
         uint256 tDev = tAmount*_TotalFee/100;
         uint256 tTransferAmount = tAmount - tDev;
         return (tTransferAmount, tDev);
-    }
-
-    function _burnTokens(address sender, uint256 tAmount) private {
-        uint256 tBurnAmount = _getBurnValues(tAmount);
-
-        _tOwned[sender] = _tOwned[sender] - tAmount;
-        _tOwned[_burnWallet] = _tOwned[_burnWallet] + tBurnAmount;
-
-        emit Transfer(sender, _burnWallet, tBurnAmount);
     }
 
     // Calculating burn fee in tokens
