@@ -4,3 +4,4 @@ artifacts/*
 node_modules/*
 cache/*
 typechain-types/*
+contracts/*
