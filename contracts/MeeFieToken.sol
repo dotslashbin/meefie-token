@@ -22,7 +22,6 @@ contract MeeFieToken is ERC20, ERC20Burnable, Ownable {
     bool public noBlackList;
     // Wallets default
     address payable public _taxWallet;
-    address payable private _zeroWallet = payable(0x0000000000000000000000000000000000000000); 
     
     uint8 private _decimals = 18;
     uint256 private _tTotal = 1000000000 * 10**_decimals;
@@ -84,9 +83,9 @@ contract MeeFieToken is ERC20, ERC20Burnable, Ownable {
         inSwapAndLiquify = false;
     }
 
-    constructor(address initialOwner)
+    constructor()
         ERC20(_name, _symbol)
-        Ownable(initialOwner)
+        Ownable(msg.sender)
     {
     }
 
