@@ -7,9 +7,12 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
 import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 
-contract TaxableToken is ERC20, Ownable, ReentrancyGuard {
+contract MeeFieToken is ERC20, Ownable, ReentrancyGuard {
     address public uniswapV2Router;
     address public uniswapV2Pair;
+    address payable _taxWallet;
+    
+    bool public inSwapAndLiquify;
 
     uint256 _initialSupply = 10_000_000 * (10 ** uint256(decimals()));
 
@@ -49,6 +52,12 @@ contract TaxableToken is ERC20, Ownable, ReentrancyGuard {
             }
 
             amount -= fees + burnAmount;
+
+            // Swap for taxation
+            uint256 contractTokenBalance = balanceOf(address(this));
+            if (contractTokenBalance > 0) {
+                swapAndLiquify(contractTokenBalance);
+            }
         }
         _;
     }
@@ -76,5 +85,53 @@ contract TaxableToken is ERC20, Ownable, ReentrancyGuard {
     function withdrawTokenFees(address to, uint256 amount) public onlyOwner nonReentrant {
         require(amount <= balanceOf(address(this)), "Insufficient balance");
         _transfer(address(this), to, amount);
+    }
+
+    /** Taxation Functions */
+
+    // Swapping tokens for chain currency using the router 
+    function swapTokensForChainCurrency(uint256 tokenAmount) private {
+
+        IUniswapV2Router02 router = IUniswapV2Router02(uniswapV2Router);
+
+        address[] memory path = new address[](2);
+        path[0] = address(this);
+        path[1] = router.WETH();
+        _approve(address(this), address(router), tokenAmount);
+        router.swapExactTokensForETHSupportingFeeOnTransferTokens(
+            tokenAmount,
+            0, 
+            path,
+            address(this),
+            block.timestamp
+        );
+    }
+
+    // Processing tokens from contract
+    function swapAndLiquify(uint256 contractTokenBalance) private lockTheSwap {
+        swapTokensForChainCurrency(contractTokenBalance);
+        uint256 contractBalanceInChainCurrency = address(this).balance;
+        sendToWallet(_taxWallet, contractBalanceInChainCurrency);
+    }
+
+    // Prevent processing while already processing! 
+    modifier lockTheSwap {
+        inSwapAndLiquify = true;
+        _;
+        inSwapAndLiquify = false;
+    }
+
+    // Send chain currency to external wallet
+    function sendToWallet(address payable wallet, uint256 amount) private {
+        wallet.transfer(amount);
+    }
+
+    /** Admin functions */
+    function taxWallet() public view returns(address) {
+        return _taxWallet;
+    }
+
+    function setTaxWallet(address payable inputAddress) public onlyOwner {
+        _taxWallet = inputAddress;
     }
 }
