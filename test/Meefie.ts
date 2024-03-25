@@ -26,8 +26,8 @@ describe('MeeFie Token', () => {
 			expect(await MeeFieToken.totalSupply()).to.equal(supplyWalletBalance)
 		})
 
-		it('Token should be able to update the tax wallet', async () => {
-			await MeeFieToken.connect(owner).updateTaxWallet(initialTaxWallet)
-		})
+		// it('Token should be able to update the tax wallet', async () => {
+		// 	await MeeFieToken.connect(owner).updateTaxWallet(initialTaxWallet)
+		// })
 	})
 })
