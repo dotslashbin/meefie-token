@@ -3,81 +3,78 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router02.sol";
+import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
 
-contract MeeFieToken is ERC20, Ownable {
-    uint256 public buyTaxPercentage = 5;
-    uint256 public sellTaxPercentage = 5;
-    address public taxWallet;
-    IUniswapV2Router02 public uniswapRouter;
-    address public uniswapPair;
+contract TaxableToken is ERC20, Ownable, ReentrancyGuard {
+    address public uniswapV2Router;
+    address public uniswapV2Pair;
 
-    constructor(
-        uint256 initialSupply,
-        address _uniswapRouter,
-        address _taxWallet
-    ) ERC20("MeeFieToken", "MTST101") Ownable(msg.sender){
-        _mint(msg.sender, initialSupply);
-        uniswapRouter = IUniswapV2Router02(_uniswapRouter);
-        taxWallet = _taxWallet;
+    uint256 _initialSupply = 10_000_000 * (10 ** uint256(decimals()));
+
+    constructor(address router) ERC20("MeeFie Token Test", "MFTS05") Ownable(msg.sender) {
+        _mint(msg.sender, _initialSupply);
+        uniswapV2Router = router;
+        // Create a Uniswap pair for this new token and set to WETH
+        uniswapV2Pair = IUniswapV2Factory(IUniswapV2Router02(uniswapV2Router).factory())
+            .createPair(address(this), IUniswapV2Router02(uniswapV2Router).WETH());
+
+        // Exclude the contract itself and the Uniswap pair from fees
+        isExcludedFromFee[address(this)] = true;
+        isExcludedFromFee[uniswapV2Pair] = true;
     }
 
-    function setUniswapPair(address _uniswapPair) external onlyOwner {
-        uniswapPair = _uniswapPair;
+    mapping (address => bool) private isExcludedFromFee;
+
+    // Modifier to check for fees
+    modifier taxAndBurn(address from, address to, uint256 amount) {
+        uint256 fees = 0;
+        uint256 burnAmount = 0;
+        
+        if (!isExcludedFromFee[from] && !isExcludedFromFee[to]) {
+            if (to == uniswapV2Pair) { // Sell transaction
+                fees = amount * 2 / 100; // 2% sell tax
+                burnAmount = amount * 1 / 100; // 1% burn on sell
+            } else if (from == uniswapV2Pair) { // Buy transaction
+                fees = amount * 1 / 100; // 1% buy tax
+            }
+
+            if (fees > 0) {
+                super._transfer(from, address(this), fees); // Collect fees
+            }
+
+            if (burnAmount > 0) {
+                _burn(from, burnAmount); // Burn tokens
+            }
+
+            amount -= fees + burnAmount;
+        }
+        _;
+    }
+
+    function transferWithTaxAndBurn(address from, address to, uint256 amount) public taxAndBurn(from, to, amount) {
+        super._transfer(from, to, amount);
     }
 
     function transfer(address recipient, uint256 amount) public override returns (bool) {
-        uint256 taxAmount = 0;
-        if (recipient == uniswapPair) { // Sell transaction
-            taxAmount = (amount * sellTaxPercentage) / 100;
-        }
-
-        if (taxAmount > 0) {
-            uint256 taxedAmount = amount - taxAmount;
-            super.transfer(taxWallet, taxAmount);
-            swapTokensForEth(taxAmount);
-            return super.transfer(recipient, taxedAmount);
-        } else {
-            return super.transfer(recipient, amount);
-        }
+        transferWithTaxAndBurn(_msgSender(), recipient, amount);
+        return true;
     }
 
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) public override returns (bool) {
-        uint256 taxAmount = 0;
-        if (sender == uniswapPair) { // Buy transaction
-            taxAmount = (amount * buyTaxPercentage) / 100;
-        }
-
-        if (taxAmount > 0) {
-            uint256 taxedAmount = amount - taxAmount;
-            super.transferFrom(sender, taxWallet, taxAmount);
-            swapTokensForEth(taxAmount);
-            return super.transferFrom(sender, recipient, taxedAmount);
-        } else {
-            return super.transferFrom(sender, recipient, amount);
-        }
+    // Function to exclude an account from fees
+    function excludeFromFee(address account) public onlyOwner {
+        isExcludedFromFee[account] = true;
     }
 
-    function swapTokensForEth(uint256 tokenAmount) private {
-        address[] memory path = new address[](2);
-        path[0] = address(this);
-        path[1] = uniswapRouter.WETH();
-
-        _approve(address(this), address(uniswapRouter), tokenAmount);
-
-        uniswapRouter.swapExactTokensForETHSupportingFeeOnTransferTokens(
-            tokenAmount,
-            0, // Accept any amount of ETH
-            path,
-            taxWallet, // ETH goes to the tax wallet
-            block.timestamp
-        );
+    // Function to include an account in fees
+    function includeInFee(address account) public onlyOwner {
+        isExcludedFromFee[account] = false;
     }
 
-    // To receive ETH from uniswapRouter when swapping
-    receive() external payable {}
+    // Function to withdraw collected fees in tokens from the contract
+    function withdrawTokenFees(address to, uint256 amount) public onlyOwner nonReentrant {
+        require(amount <= balanceOf(address(this)), "Insufficient balance");
+        _transfer(address(this), to, amount);
+    }
 }
