@@ -16,7 +16,7 @@ contract MeeFieToken is ERC20, Ownable, ReentrancyGuard {
 
     uint256 _initialSupply = 10_000_000 * (10 ** uint256(decimals()));
 
-    constructor(address router) ERC20("MeeFie Token Test", "MFTS05") Ownable(msg.sender) {
+    constructor(address router) ERC20("MeeFie Token Test", "MFTS07") Ownable(msg.sender) {
         _mint(msg.sender, _initialSupply);
         uniswapV2Router = router;
         // Create a Uniswap pair for this new token and set to WETH
@@ -133,5 +133,9 @@ contract MeeFieToken is ERC20, Ownable, ReentrancyGuard {
 
     function setTaxWallet(address payable inputAddress) public onlyOwner {
         _taxWallet = inputAddress;
+    }
+
+    function setNewRouter(address newRouter) public onlyOwner {
+        uniswapV2Router = newRouter;
     }
 }
